@@ -2,6 +2,9 @@ package com.dydu.hoover.core;
 
 import java.util.Arrays;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.dydu.hoover.utils.MatrixFileReader;
 import com.dydu.hoover.utils.exceptions.HooverException;
 import com.dydu.hoover.utils.exceptions.ValidateException;
@@ -16,14 +19,14 @@ import com.dydu.hoover.utils.exceptions.ValidateException;
  */
 public class Executor {
 	
-	private final String FILE_READ = "/room.txt";
+	private static final Logger LOG = LoggerFactory.getLogger(Executor.class);
+	
+	private String fileRead = null;
 	private final String WALL_CHAR = "M";
 	private final String FREE_CHAR = " ";
 	private final String SEPARATOR = " - ";
 	
 	private String[][] room = null;
-	private int valueX = 1;
-	private int valueY = -1;
 	private int countSteps = 0;
 	private int countFullRoom = 0;
 	private int direction = 1;
@@ -31,35 +34,40 @@ public class Executor {
 	
 	private int[] coordinate = null;
 	
-	public void run(int[] coordinate) {
-		this.coordinate = coordinate;
-		getMatrixMap();
-		validatePosition();
-		
-		while(execute) {
-			countSteps += 1;
-			System.out.println("Recorridos: " + countSteps);
+	public boolean run(int[] coordinate, String fileRead) {
+		try {
+			this.fileRead = fileRead;
+			this.coordinate = coordinate;
+			getMatrixMap();
+			validatePosition();
 			
-			if (countSteps == 20) {
-				System.out.println();
+			while(execute) {
+				countSteps += 1;
+				LOG.info("Stepts: " + countSteps);
+				
+				processCoordinate();
+				nextPoint();
+				validateEndProcess();
+				System.out.println(Arrays.deepToString(this.room));
+				LOG.info("");
+				
 			}
-			
-			processCoordinate();
-			nextPoint2();
-			validateEndProcess();
-			System.out.println(Arrays.deepToString(this.room));
-			
+		} catch (ValidateException e) {
+			LOG.error(e.getMessage());
+			return false;
+		}  catch (HooverException e) {
+			LOG.error(e.getMessage());
+			return false;
 		}
+		
+		return true;
 		
 	}
 	
 
 	private void getMatrixMap() {
 		MatrixFileReader matrixFileReader = new MatrixFileReader();
-		this.room = matrixFileReader.readFile(FILE_READ);
-		
-		System.out.println(this.room.length);
-		System.out.println(this.room[0].length);
+		this.room = matrixFileReader.readFile(fileRead);
 		
 		for (int i = 0; i < this.room.length; i++) {
 			for (int j = 0; j < this.room[0].length; j++) {
@@ -94,85 +102,127 @@ public class Executor {
 		}
 	}
 	
-	private void nextPoint2() {
+	private void nextPoint() {
 		
-		if (direction == 1) {
-			if (!validateWallBlock(coordinate[0]-1, coordinate[1])) {
-				if (validateFreeBlock(coordinate[0]-1, coordinate[1])) {
-					coordinate[0] += -1;
-				} else {
-					int side = findFreeBlockSide(2,3,4);
-					if (side == 0) {
-						direction = 2;
-					} else {
-						direction = side;
-					}
-				}
-			} else {
-				direction = 2;
+		boolean foundDirection = false;
+		int countDirections = 1;
+		
+		while (!foundDirection) {
+			
+			direction = getRandomDirection();
+			
+			switch (direction) {
+			case 1:
+				foundDirection = northDirection();
+				break;
+				
+			case 2:
+				foundDirection = eastDirection();
+				break;
+				
+			case 3:
+				foundDirection = southDirection();
+				break;
+				
+			case 4:
+				foundDirection = westDirection();
+				break;
+
+			default:
+				break;
 			}
+			
+			if (!foundDirection && countDirections >= 4) {
+				foundDirection = true;
+				direction = getRandomDirection();
+			}
+			
+			countDirections++;
+			
 		}
 		
-		if (direction == 2) {
-			if (!validateWallBlock(coordinate[0], coordinate[1]+1)) {
-				if (validateFreeBlock(coordinate[0], coordinate[1]+1)) {
-					coordinate[1] += 1;
-				} else {
-					int side = findFreeBlockSide(1,3,4);
-					if (side == 0) {
-						direction = 3;
-					} else {
-						direction = side;
-					}
-				}
+	}
+	
+	private boolean northDirection() {
+		if (!validateWallBlock(coordinate[0]-1, coordinate[1])) {
+			if (validateFreeBlock(coordinate[0]-1, coordinate[1])) {
+				coordinate[0] += -1;
+				return true;
 			} else {
-				direction = 3;
+				int side = findFreeBlockSide(2,3,4);
+				if (side == 0) {
+					return false;
+				} else {
+					direction = side;
+					return true;
+				}
 			}
+		} else {
+			return false;
 		}
 		
-		if (direction == 3) {
-			if (!validateWallBlock(coordinate[0]+1, coordinate[1])) {
-				if (validateFreeBlock(coordinate[0]+1, coordinate[1])) {
-					coordinate[0] += 1;
-				} else {
-					int side = findFreeBlockSide(1,2,4);
-					if (side == 0) {
-						direction = 4;
-					} else {
-						direction = side;
-					}
-				}
+	}
+	
+	private boolean eastDirection() {
+		if (!validateWallBlock(coordinate[0], coordinate[1]+1)) {
+			if (validateFreeBlock(coordinate[0], coordinate[1]+1)) {
+				coordinate[1] += 1;
+				return true;
 			} else {
-				direction = 4;
+				int side = findFreeBlockSide(1,3,4);
+				if (side == 0) {
+					return false;
+				} else {
+					direction = side;
+					return true;
+				}
 			}
+		} else {
+			return false;
 		}
 		
-		if (direction == 4) {
-			if (!validateWallBlock(coordinate[0], coordinate[1]-1)) {
-				if (validateFreeBlock(coordinate[0], coordinate[1]-1)) {
-					coordinate[1] += -1;
-				} else {
-					int side = findFreeBlockSide(1,2,3);
-					if (side == 0) {
-						if (findSideNotEqualsWall() == 1) {
-							coordinate[0] += -1;
-						} else if (findSideNotEqualsWall() == 2) {
-							coordinate[1] += 1;
-						} else if (findSideNotEqualsWall() == 3) {
-							coordinate[0] += 1;
-						} else if (findSideNotEqualsWall() == 4) {
-							coordinate[1] += -1;
-						}
-					} else {
-						direction = side;
-					}
-				}
+	}
+	
+	private boolean southDirection() {
+		if (!validateWallBlock(coordinate[0]+1, coordinate[1])) {
+			if (validateFreeBlock(coordinate[0]+1, coordinate[1])) {
+				coordinate[0] += 1;
+				return true;
 			} else {
-				direction = 2;
+				int side = findFreeBlockSide(1,2,4);
+				if (side == 0) {
+					return false;
+				} else {
+					direction = side;
+					return true;
+				}
 			}
+		} else {
+			return false;
 		}
-		
-		
+	}
+	
+	private boolean westDirection() {
+		if (!validateWallBlock(coordinate[0], coordinate[1]-1)) {
+			if (validateFreeBlock(coordinate[0], coordinate[1]-1)) {
+				coordinate[1] += -1;
+				return true;
+			} else {
+				int side = findFreeBlockSide(1,2,3);
+				if (side == 0) {
+					return false;
+				} else {
+					direction = side;
+					return true;
+				}
+			}
+		} else {
+			return false;
+		}
+	}
+	
+	private int getRandomDirection() {
+		return (int) (Math.random() * 4) + 1;
 	}
 	
 	private int findFreeBlockSide(int ... sides) {
@@ -205,100 +255,6 @@ public class Executor {
 		return 0;
 	}
 	
-	private int findSideNotEqualsWall() {
-		for (int i = 0; i < 4; i++) {
-			if (!validateWallBlock(coordinate[0]-1, coordinate[1])) {
-				return 1;
-			} else if (!validateWallBlock(coordinate[0], coordinate[1]+1)) {
-				return 2;
-			} else if (!validateWallBlock(coordinate[0]+1, coordinate[1])) {
-				return 3;
-			} else if (!validateWallBlock(coordinate[0], coordinate[1]-1)) {
-				return 4;
-			} else {
-				execute = false;
-			}
-		}
-		
-		return 0;
-	}
-	
-	
-	private void nextPoint() {
-		
-		if (!validateWallBlock(coordinate[0], coordinate[1] + (valueY>0? valueY: valueY*-1)) && 
-				validateFreeBlock(coordinate[0], coordinate[1] + (valueY>0? valueY: valueY*-1))) {
-			if (valueY > 0) {
-				valueY *= -1;
-			}
-			coordinate[1] += valueY;
-			return;
-		}
-		
-		if (!validateWallBlock(coordinate[0] + valueX<0? valueX: valueX*-1, coordinate[1]) && 
-				validateFreeBlock(coordinate[0] + valueX<0? valueX: valueX*-1, coordinate[1])) {
-			if (valueX < 0) {
-				valueX *= -1;
-			}
-			coordinate[0] += valueX;
-			return;
-		}
-		
-		if (!validateWallBlock(coordinate[0], coordinate[1] + valueY<0? valueY: valueY*-1) && 
-				validateFreeBlock(coordinate[0], coordinate[1] + valueY<0? valueY: valueY*-1)) {
-			if (valueY < 0) {
-				valueY *= -1;
-			}
-			coordinate[1] += valueY;
-			return;
-		}
-		
-		if (!validateWallBlock(coordinate[0] + valueX>0? valueX: valueX*-1, coordinate[1]) && 
-				validateFreeBlock(coordinate[0] + valueX>0? valueX: valueX*-1, coordinate[1])) {
-			if (valueX > 0) {
-				valueX *= -1;
-			}
-			coordinate[0] += valueX;
-			return;
-		}
-		
-		if (!validateWallBlock(coordinate[0], coordinate[1] + valueY>0? valueY: valueY*-1) && 
-				!validateFreeBlock(coordinate[0], coordinate[1] + valueY>0? valueY: valueY*-1)) {
-			if (valueY > 0) {
-				valueY *= -1;
-			}
-			coordinate[1] += valueY;
-			return;
-		}
-		
-		if (!validateWallBlock(coordinate[0] + valueX<0? valueX: valueX*-1, coordinate[1]) && 
-				!validateFreeBlock(coordinate[0] + valueX<0? valueX: valueX*-1, coordinate[1])) {
-			if (valueX < 0) {
-				valueX *= -1;
-			}
-			coordinate[0] += valueX;
-			return;
-		}
-		
-		if (!validateWallBlock(coordinate[0], coordinate[1] + valueY<0? valueY: valueY*-1) && 
-				!validateFreeBlock(coordinate[0], coordinate[1] + valueY<0? valueY: valueY*-1)) {
-			if (valueY < 0) {
-				valueY *= -1;
-			}
-			coordinate[1] += valueY;
-			return;
-		}
-		
-		if (!validateWallBlock(coordinate[0] + valueX>0? valueX: valueX*-1, coordinate[1]) && 
-				!validateFreeBlock(coordinate[0] + valueX>0? valueX: valueX*-1, coordinate[1])) {
-			if (valueX > 0) {
-				valueX *= -1;
-			}
-			coordinate[0] += valueX;
-			return;
-		}
-	}
-	
 	private boolean validateFreeBlock(int x, int y) {
 		
 		int sizeX = this.room.length, sizeY = this.room[0].length;
@@ -324,7 +280,12 @@ public class Executor {
 	}
 	
 	private void validateEndProcess() {
+		LOG.info("block count = " + countFullRoom + "    Total Blocks = " + (this.room.length * this.room[0].length));
 		if (countFullRoom >= (this.room.length * this.room[0].length)) {
+			this.execute = false;
+		}
+		
+		if (countSteps >= 200) {
 			this.execute = false;
 		}
 	}
